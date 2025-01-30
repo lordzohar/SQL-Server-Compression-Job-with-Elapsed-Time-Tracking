@@ -1,164 +1,142 @@
-# SQL Server Compression Job with Elapsed Time Tracking
-=============================================================
+# SQL Table Compression Script
 
-Overview
---------
+This script identifies uncompressed tables in the top 10 largest databases and applies **PAGE compression** to them. It is designed to work in environments where database size optimization is critical.
 
-This script automates the page compression of tables across the top 10 largest online databases in your SQL Server instance. It includes elapsed time tracking for each database and table, providing insights into the duration of each compression step.
+---
 
-* * *
+## Features
 
-Prerequisites
--------------
+- **Identifies Uncompressed Tables**: Lists all tables with no compression (`NONE`) in the top 10 largest databases.
+- **Applies PAGE Compression**: Automatically applies PAGE compression to the identified tables.
+- **Dynamic Database Switching**: Switches database contexts dynamically to handle multiple databases.
+- **Error Handling**: Logs errors without stopping execution.
+- **Progress Logging**: Provides detailed logs for each step.
 
-1.  **Database Access**:
-    
-    *   Ensure you have the necessary permissions to execute `ALTER TABLE` commands across the target databases.
-        
-    *   Access to the `sys.databases` and `INFORMATION_SCHEMA.TABLES` views is required.
-        
-2.  **SQL Server Agent**:
-    
-    *   SQL Server Agent should be enabled to schedule and execute the job.
-        
-3.  **Compatibility**:
-    
-    *   The script is compatible with SQL Server 2018 and later versions.
-        
+---
 
-* * *
+## Prerequisites
 
-Steps to Create the Job in SSMS
--------------------------------
+1. **Permissions**:
+   - The user running the script must have:
+     - `ALTER` permissions on the tables.
+     - Access to `sys.partitions`, `sys.tables`, and `sys.schemas`.
+   - Ensure the account has sufficient privileges to execute `ALTER TABLE` commands.
 
-### Step 1: Create the Job
+2. **SQL Server Version**:
+   - Compatible with SQL Server 2012 and later (supports `DATA_COMPRESSION`).
 
-1.  Open SSMS and connect to your SQL Server instance.
-    
-2.  Expand the **SQL Server Agent** node in Object Explorer.
-    
-3.  Right-click **Jobs**, then click **New Job**.
-    
-4.  In the **New Job** window, provide a name for the job, such as `Database Table Compression with Elapsed Time`.
-    
+3. **Execution Environment**:
+   - Run the script in **SQL Server Management Studio (SSMS)** or a SQL job.
+   - Avoid running in the `master` database context unless necessary.
 
-### Step 2: Add Job Steps
+-------------------------------------------------------------------------------------------------------
 
-1.  Go to the **Steps** page in the **New Job** window.
-    
-2.  Click **New** to add a new step.
-    
-3.  In the **New Job Step** window:
-    
-    *   **Step Name**: `Compress Tables with Elapsed Time`
-        
-    *   **Type**: `Transact-SQL script (T-SQL)`
-        
-    *   **Database**: not `master` or `ssis` or `system database` use only `any user database`
-        
-    *   **Command**: Paste the full script into the text box.
-        
+## How to Use
 
-### Step 3: Schedule the Job
+1. **Open the Script**:
+   - Open the script in SSMS or your preferred SQL editor.
 
-1.  Go to the **Schedules** page in the **New Job** window.
-    
-2.  Click **New** to create a schedule.
-    
-3.  Configure the schedule:
-    
-    *   **Name**: `Daily Compression`
-        
-    *   **Frequency**: Set the desired frequency (e.g., daily, weekly).
-        
-    *   **Time**: Choose an appropriate time when server usage is minimal, such as during off-peak hours.
-        
+2. **Run the Script**:
+   - Execute the script in a query window.
+   - Ensure you are **not** in the `master` database context unless explicitly required.
 
-### Step 4: Configure Alerts (Optional)
+3. **Review Output**:
+   - The script will:
+     - List all uncompressed tables in the `##UncompressedTables` global temp table.
+     - Apply PAGE compression to the identified tables.
+     - Log progress and errors in the messages window.
 
-1.  Go to the **Notifications** page in the **New Job** window.
-    
-2.  Set up email notifications or alerts for job completion, success, or failure (requires Database Mail configuration).
-    
+4. **Verify Compression**:
+   - After execution, query `sys.partitions` to confirm the compression status of the tables.
 
-### Step 5: Save and Test the Job
+---
 
-1.  Click **OK** to save the job.
-    
-2.  Test the job by right-clicking the job in the **Jobs** list and selecting **Start Job at Step...**.
-    
+## Script Workflow
 
-* * *
+1. **Identify Uncompressed Tables**:
+   - The script queries `sys.partitions` to find tables with `data_compression_desc = 'NONE'`.
+   - Results are stored in a global temp table (`##UncompressedTables`).
 
-Script Details
---------------
+2. **Apply Compression**:
+   - The script dynamically switches to each database and applies PAGE compression to the identified tables.
 
-The script performs the following actions:
+3. **Logging**:
+   - Progress and errors are logged in the messages window for transparency.
 
-1.  **Database Selection**:
-    
-    *   Identifies the top 10 largest online databases (excluding `master`, `model`, `msdb`, `tempdb`, and system databases).
-        
-    *   Skips offline databases to prevent errors.
-        
-2.  **Table Compression**:
-    
-    *   Loops through all base tables in each selected database.
-        
-    *   Applies page-level compression using `ALTER TABLE ... REBUILD PARTITION`.
-        
-3.  **Elapsed Time Tracking**:
-    
-    *   Tracks and logs elapsed time for each database and table using `GETDATE()` and `DATEDIFF()`.
-        
-4.  **Error Handling**:
-    
-    *   Uses `TRY...CATCH` blocks to handle errors and continue processing other databases and tables.
-        
+---
 
-* * *
+## Example Output
 
-How to Run the Job
-------------------
+### List of Uncompressed Tables
+DatabaseName   SchemaName   TableName       CompressionType
+-------------- ------------ --------------- ----------------
+DB1            dbo          Employees       NONE
+DB2            sales        Orders          NONE
 
-1.  **Manual Execution**:
-    
-    *   Right-click the job in the **Jobs** list and select **Start Job at Step...** to run it immediately.
-        
-2.  **Automated Execution**:
-    
-    *   Once scheduled, the job will run automatically based on the defined schedule.
-        
 
-* * *
 
-Expected Output
----------------
+## Compression Logs
+-- Applying PAGE compression to: DB1.dbo.Employees
+-- Compression applied to table: DB1.dbo.Employees
+-- Applying PAGE compression to: DB2.sales.Orders
+-- Compression applied to table: DB2.sales.Orders
 
-1.  The job prints detailed progress information in the job's **Execution Log**, including:
-    
-    *   Start and end time of compression for each database and table.
-        
-    *   Elapsed time for each step.
-        
-    *   Any errors encountered during execution.
-        
-2.  To view the output:
-    
-    *   Right-click the job in the **Jobs** list, select **View History**, and expand the most recent execution.
-        
 
-* * *
+-------------------------------------------------------------------------------------------------------------------
+## Troubleshooting
+1. Permission Errors
+Error: The user does not have permission to alter the table.
 
-Notes
+Solution: Ensure the account running the script has ALTER permissions on the tables.
+
+2. Database Context Not Switching
+Error: Table does not exist.
+
+Solution: Ensure the script is not executed in the master database context. Use a neutral database or explicitly switch contexts.
+
+3. Long Execution Time
+Issue: The script takes a long time to run.
+-----------------------------------------------------------------------------------------------------------------------------
+## Solution:
+
+Run the script during maintenance windows.
+
+Break the script into smaller chunks (e.g., process one database at a time).
+
+4. Global Temp Table Already Exists
+Error: There is already an object named '##UncompressedTables' in the database.
+
+Solution: Drop the global temp table before running the script:
+
+-- sql
+IF OBJECT_ID('tempdb..##UncompressedTables') IS NOT NULL
+    DROP TABLE ##UncompressedTables
 -----
+## Best Practices
+1. Backup Databases:
+- Always take a full backup of the databases before running the script.
 
-*   Ensure the databases are online and accessible during job execution.
-    
-*   Monitor server performance during compression, as it may increase resource usage.
-    
-*   Test the script in a non-production environment before running it in production.
+2. Test in Non-Production:
 
------
+- Test the script in a non-production environment before running it in production.
+
+3. Monitor Performance:
+
+- Compression can be resource-intensive. Monitor CPU, memory, and disk usage during execution.
+
+4. Schedule During Off-Peak Hours:
+
+- Run the script during maintenance windows to minimize impact on users.
+
+5. Script Location
+- The script is located in the scripts folder of this repository.
+- File Name: PageCompression.sql
+------------------------------------------------------------------------------------------
+## License
+This script is provided under the MIT License. Feel free to modify and use it as needed.
+-----------------------------------------------------------------------------------------------
+Support
+For questions or issues, please open an issue in the repository
+-----------------------------------------------------------------------------------------------
 <a href="https://www.buymeacoffee.com/dailymeme" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 60px !important;width: 217px !important;" ></a>
     
