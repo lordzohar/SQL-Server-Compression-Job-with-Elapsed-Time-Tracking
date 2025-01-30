@@ -130,7 +130,7 @@ IF OBJECT_ID('tempdb..##UncompressedTables') IS NOT NULL
 
 5. Script Location
 - The script is located in the scripts folder of this repository.
-- File Name: PageCompression.sql
+- File Name: page_compression.sql
 ------------------------------------------------------------------------------------------
 ## License
 This script is provided under the MIT License. Feel free to modify and use it as needed.
